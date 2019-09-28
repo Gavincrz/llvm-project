@@ -166,14 +166,6 @@ const unsigned SyscallCFChecker::InvalidArgIndex;
 const char SyscallCFChecker::MsgControlFlowTainted[] =
         "Control flow to a sensitive function is tainted";
 
-const char SyscallCFChecker::MsgUncontrolledFormatString[] =
-        "Untrusted data is used as a format string "
-        "(CWE-134: Uncontrolled Format String)";
-
-const char SyscallCFChecker::MsgTaintedBufferSize[] =
-        "Untrusted data is used to specify the buffer size "
-        "(CERT/STR31-C. Guarantee that storage for strings has sufficient space "
-        "for character data and the null terminator)";
 
 } // end of anonymous namespace
 
@@ -365,6 +357,14 @@ void SyscallCFChecker::checkBranchCondition(const Stmt *Condition,
     LCSValPair value = std::make_pair(LC, Val);
     State = State->set<ExprSValMap>(expr, value);
 
+    llvm::errs() << "branch condition expr dump: ";
+    expr->dump();
+    llvm::errs() << "\n";
+    llvm::errs() << "val dump: ";
+    Val.dump();
+    llvm::errs() << "\n";
+    llvm::errs() << "istainted: " << isTainted(State, Val) << " LC: " << LC << "\n";
+
     C.addTransition(State);
 }
 
@@ -500,6 +500,14 @@ bool SyscallCFChecker::checkPre(const CallExpr *CE,
         }
 
         SVal Val = value->second;
+
+        llvm::errs() << "expr dump: ";
+        lastCondition->dump();
+        llvm::errs() << "\n";
+        llvm::errs() << "val dump: ";
+        Val.dump();
+        llvm::errs() << "\n";
+        llvm::errs() << " istainted: " << isTainted(State, Val) << " LC: " << value->first << "\n";
 
         if (isTainted(State, Val)) {
             // Generate diagnostic.
