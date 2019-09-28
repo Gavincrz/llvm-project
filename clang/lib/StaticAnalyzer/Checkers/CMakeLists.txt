@@ -39,6 +39,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   FixedAddressChecker.cpp
   GCDAntipatternChecker.cpp
   GenericTaintChecker.cpp
+  SyscallCFChecker.cpp
   GTestChecker.cpp
   IdenticalExprChecker.cpp
   InnerPointerChecker.cpp

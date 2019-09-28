@@ -801,6 +801,11 @@ def GenericTaintChecker : Checker<"TaintPropagation">,
   HelpText<"Generate taint information used by other checkers">,
   Documentation<HasAlphaDocumentation>;
 
+
+def SyscallCFChecker : Checker<"TaintFlowControl">,
+  HelpText<"Check if tainted value can affect the control flow of a sensitive function">,
+  Documentation<NotDocumented>;
+
 } // end "alpha.security.taint"
 
 //===----------------------------------------------------------------------===//

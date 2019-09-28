@@ -128,6 +128,10 @@ public:
     return NB.getContext().getBlock()->getBlockID();
   }
 
+  const CFGBlock* getCFGBlock() const {
+    return NB.getContext().getBlock();
+  }
+
   /// If the given node corresponds to a PostStore program point,
   /// retrieve the location region as it was uttered in the code.
   ///
