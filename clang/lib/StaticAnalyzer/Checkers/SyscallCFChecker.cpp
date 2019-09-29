@@ -60,6 +60,8 @@ namespace {
 
     static const char MsgControlFlowTainted[];
 
+    bool generateReportIfCFTainted(CheckerContext &C, CFG *cfg, CFGBlock* cfgBlock) const;
+
     /// Catch taint related bugs. Check if tainted data is passed to a
     /// system call etc.
     bool checkPre(const CallExpr *CE, CheckerContext &C) const;
@@ -77,10 +79,11 @@ namespace {
     /// Given a pointer argument, return the value it points to.
     static Optional<SVal> getPointedToSVal(CheckerContext &C, const Expr *Arg);
 
-
+/*
     /// Generate a report if the expression is tainted or points to tainted data.
     bool generateReportIfTainted(const Expr *E, const char Msg[],
                                  CheckerContext &C) const;
+*/
 
     using ArgVector = SmallVector<unsigned, 2>;
 
@@ -356,15 +359,6 @@ void SyscallCFChecker::checkBranchCondition(const Stmt *Condition,
 
     LCSValPair value = std::make_pair(LC, Val);
     State = State->set<ExprSValMap>(expr, value);
-
-    llvm::errs() << "branch condition expr dump: ";
-    expr->dump();
-    llvm::errs() << "\n";
-    llvm::errs() << "val dump: ";
-    Val.dump();
-    llvm::errs() << "\n";
-    llvm::errs() << "istainted: " << isTainted(State, Val) << " LC: " << LC << "\n";
-
     C.addTransition(State);
 }
 
@@ -463,6 +457,42 @@ bool SyscallCFChecker::propagateFromPre(const CallExpr *CE,
     return false;
 }
 
+bool SyscallCFChecker::generateReportIfCFTainted(CheckerContext &C, CFG *cfg, CFGBlock* cfgBlock) const
+{
+    ProgramStateRef State = C.getState();
+    ControlDependencyCalculator Control(cfg);
+    CFGBlockVector BLKVector = Control.getControlDependencies(cfgBlock);
+    if (BLKVector.empty()) {
+        return false;
+    }
+
+    for (CFGBlockVector::iterator I = BLKVector.begin(), E = BLKVector.end();
+         I != E; ++I) {
+        const Expr* lastCondition = (*I)->getLastCondition();
+        const LCSValPair *value = State->get<ExprSValMap>(lastCondition);
+
+        if (value == NULL) {
+            llvm::errs() << "excuse me ?" << "\n";
+            continue;
+        }
+
+        SVal Val = value->second;
+        if (isTainted(State, Val)) {
+            // Generate diagnostic.
+            if (ExplodedNode *N = C.generateNonFatalErrorNode()) {
+                initBugType();
+                auto report = llvm::make_unique<BugReport>(*BT, MsgControlFlowTainted, N);
+                report->addRange(lastCondition->getSourceRange());
+                report->addVisitor(llvm::make_unique<TaintBugVisitor>(Val));
+                C.emitReport(std::move(report));
+                return true;
+            }
+        }
+    }
+    return false;
+
+}
+
 bool SyscallCFChecker::checkPre(const CallExpr *CE,
                                    CheckerContext &C) const {
 
@@ -478,51 +508,31 @@ bool SyscallCFChecker::checkPre(const CallExpr *CE,
     if (!Name.equals("write"))
         return false;
 
+    llvm::errs() << "============\nCE: \n";
+    CE->dump();
+    llvm::errs() << "stack dump: \n"
+    LC->dumpStack();
 
     // get all the denpended branches
     const LocationContext* LC = C.getLocationContext();
-    CFG *cfg =  const_cast<CFG *>(LC->getCFG());
-    ControlDependencyCalculator Control(cfg);
+    const StackFrameContext *SC = LC->getStackFrame();
 
+    CFG *cfg = const_cast<CFG *>(LC->getCFG());
     CFGBlock* cfgBlock = const_cast<CFGBlock*>(C.getCFGBlock());
 
-    CFGBlockVector BLKVector = Control.getControlDependencies(cfgBlock);
-
-    for (CFGBlockVector::iterator I = BLKVector.begin(), E = BLKVector.end();
-            I != E; ++I) {
-        const Expr* lastCondition = (*I)->getLastCondition();
-
-        const LCSValPair *value = State->get<ExprSValMap>(lastCondition);
-
-        if (value == NULL) {
-            llvm::errs() << "excuse me ?" << "\n";
-            continue;
-        }
-
-        SVal Val = value->second;
-
-        llvm::errs() << "expr dump: ";
-        lastCondition->dump();
-        llvm::errs() << "\n";
-        llvm::errs() << "val dump: ";
-        Val.dump();
-        llvm::errs() << "\n";
-        llvm::errs() << " istainted: " << isTainted(State, Val) << " LC: " << value->first << "\n";
-
-        if (isTainted(State, Val)) {
-            // Generate diagnostic.
-            if (ExplodedNode *N = C.generateNonFatalErrorNode()) {
-                initBugType();
-                auto report = llvm::make_unique<BugReport>(*BT, MsgControlFlowTainted, N);
-                report->addRange(lastCondition->getSourceRange());
-                report->addVisitor(llvm::make_unique<TaintBugVisitor>(Val));
-                C.emitReport(std::move(report));
-                return true;
-            }
-        }
+    // recursively check parent dependency
+    bool ret = generateReportIfCFTainted(C, cfg, cfgBlock);
+    while (!ret && LC->getParent() != NULL) {
+        cfgBlock = const_cast<CFGBlock*>(SC->getCallSiteBlock());
+        LC = LC->getParent();
+        cfg = const_cast<CFG *>(LC->getCFG());
+        ret = generateReportIfCFTainted(C, cfg, cfgBlock);
+        SC = LC->getStackFrame();
     }
 
-    return false;
+    llvm::errs() << "============" << "\n";
+
+    return ret;
 
 }
 
@@ -649,6 +659,7 @@ bool SyscallCFChecker::isStdin(const Expr *E, CheckerContext &C) {
     return false;
 }
 
+/*
 static bool getPrintfFormatArgumentNum(const CallExpr *CE,
                                        const CheckerContext &C,
                                        unsigned int &ArgNum) {
@@ -700,7 +711,7 @@ bool SyscallCFChecker::generateReportIfTainted(const Expr *E,
     }
     return false;
 }
-
+*/
 
 
 void ento::registerSyscallCFChecker(CheckerManager &mgr) {
