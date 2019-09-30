@@ -508,10 +508,6 @@ bool SyscallCFChecker::checkPre(const CallExpr *CE,
     if (!Name.equals("write"))
         return false;
 
-    llvm::errs() << "============\nCE: \n";
-    CE->dump();
-    llvm::errs() << "stack dump: \n"
-    LC->dumpStack();
 
     // get all the denpended branches
     const LocationContext* LC = C.getLocationContext();
@@ -529,8 +525,6 @@ bool SyscallCFChecker::checkPre(const CallExpr *CE,
         ret = generateReportIfCFTainted(C, cfg, cfgBlock);
         SC = LC->getStackFrame();
     }
-
-    llvm::errs() << "============" << "\n";
 
     return ret;
 
@@ -659,59 +653,6 @@ bool SyscallCFChecker::isStdin(const Expr *E, CheckerContext &C) {
     return false;
 }
 
-/*
-static bool getPrintfFormatArgumentNum(const CallExpr *CE,
-                                       const CheckerContext &C,
-                                       unsigned int &ArgNum) {
-    // Find if the function contains a format string argument.
-    // Handles: fprintf, printf, sprintf, snprintf, vfprintf, vprintf, vsprintf,
-    // vsnprintf, syslog, custom annotated functions.
-    const FunctionDecl *FDecl = C.getCalleeDecl(CE);
-    if (!FDecl)
-        return false;
-    for (const auto *Format : FDecl->specific_attrs<FormatAttr>()) {
-        ArgNum = Format->getFormatIdx() - 1;
-        if ((Format->getType()->getName() == "printf") && CE->getNumArgs() > ArgNum)
-            return true;
-    }
-
-    // Or if a function is named setproctitle (this is a heuristic).
-    if (C.getCalleeName(CE).find("setproctitle") != StringRef::npos) {
-        ArgNum = 0;
-        return true;
-    }
-
-    return false;
-}
-
-bool SyscallCFChecker::generateReportIfTainted(const Expr *E,
-                                                  const char Msg[],
-                                                  CheckerContext &C) const {
-    assert(E);
-
-    // Check for taint.
-    ProgramStateRef State = C.getState();
-    Optional<SVal> PointedToSVal = getPointedToSVal(C, E);
-    SVal TaintedSVal;
-    if (PointedToSVal && isTainted(State, *PointedToSVal))
-        TaintedSVal = *PointedToSVal;
-    else if (isTainted(State, E, C.getLocationContext()))
-        TaintedSVal = C.getSVal(E);
-    else
-        return false;
-
-    // Generate diagnostic.
-    if (ExplodedNode *N = C.generateNonFatalErrorNode()) {
-        initBugType();
-        auto report = llvm::make_unique<BugReport>(*BT, Msg, N);
-        report->addRange(E->getSourceRange());
-        report->addVisitor(llvm::make_unique<TaintBugVisitor>(TaintedSVal));
-        C.emitReport(std::move(report));
-        return true;
-    }
-    return false;
-}
-*/
 
 
 void ento::registerSyscallCFChecker(CheckerManager &mgr) {
