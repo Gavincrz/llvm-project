@@ -508,6 +508,12 @@ bool SyscallCFChecker::checkPre(const CallExpr *CE,
     if (!Name.equals("write"))
         return false;
 
+    // check if the second argument is a string literal, if so ignore
+    Expr *StrArg = const_cast<Expr*>(CE->getArg(1)->IgnoreParenCasts());
+    StringLiteral *Literal = dyn_cast<StringLiteral>(StrArg);
+    if (Literal && Literal->isAscii()){
+        return false;
+    }
 
     // get all the denpended branches
     const LocationContext* LC = C.getLocationContext();
